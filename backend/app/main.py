@@ -29,3 +29,13 @@ app.include_router(
     prefix="/chat",
     tags=["Chat"]
 )
+
+from backend.app.api.documents import (
+    router as documents_router
+)
+
+app.include_router(
+    documents_router,
+    prefix="/documents",
+    tags=["Documents"]
+)
