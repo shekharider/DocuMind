@@ -21,3 +21,4 @@ __pycache__/
 
 test.py
 jwt_test.py
+test_pdf.py

@@ -12,10 +12,17 @@ import shutil
 
 from backend.app.db.session import get_db
 
+from backend.app.services.rag_engine import (
+    extract_text_from_pdf,
+    chunk_text
+)
+
+
 from backend.app.db.models import (
     User,
     Document,
-    ChatSession
+    ChatSession,
+    DocumentChunk
 )
 
 from backend.app.api.auth import (
@@ -73,8 +80,35 @@ def upload_document(
 
     db.refresh(document)
 
+    text = extract_text_from_pdf(
+        str(file_path)
+   )
+
+    chunks = chunk_text(text)
+
+    for index, chunk in enumerate(chunks):
+
+        db_chunk = DocumentChunk(
+            document_id=document.id,
+            chunk_index=index,
+            content=chunk
+        )
+
+        db.add(db_chunk)
+
+    db.commit()
+
     return {
-        "id": document.id,
-        "filename": document.filename,
-        "session_id": document.session_id
+    "id": document.id,
+    "filename": document.filename,
+    "session_id": document.session_id,
+    "chunks_created": len(chunks)
     }
+@router.get("/chunks/{document_id}")
+def get_chunks(
+    document_id: int,
+    db: Session = Depends(get_db)
+):
+    return db.query(DocumentChunk).filter(
+        DocumentChunk.document_id == document_id
+    ).limit(5).all()
