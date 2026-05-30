@@ -51,3 +51,65 @@ def get_sessions(
     ).all()
 
     return sessions
+
+from backend.app.db.models import ChatMessage
+from backend.app.db.chat_schemas import MessageCreate
+
+@router.post("/messages")
+def create_message(
+    message_data: MessageCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+
+    session = db.query(ChatSession).filter(
+        ChatSession.id == message_data.session_id,
+        ChatSession.user_id == current_user.id
+    ).first()
+
+    if not session:
+        raise HTTPException(
+            status_code=404,
+            detail="Session not found"
+        )
+
+    message = ChatMessage(
+        session_id=message_data.session_id,
+        role=message_data.role,
+        content=message_data.content
+    )
+
+    db.add(message)
+
+    db.commit()
+
+    db.refresh(message)
+
+    return {
+        "id": message.id,
+        "content": message.content
+    }
+
+@router.get("/messages/{session_id}")
+def get_messages(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+
+    session = db.query(ChatSession).filter(
+        ChatSession.id == session_id,
+        ChatSession.user_id == current_user.id
+    ).first()
+
+    if not session:
+        raise HTTPException(
+            status_code=404,
+            detail="Session not found"
+        )
+
+    messages = db.query(ChatMessage).filter(
+        ChatMessage.session_id == session_id
+    ).all()
+
+    return messages

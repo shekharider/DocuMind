@@ -11,3 +11,8 @@ class ChatSessionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class MessageCreate(BaseModel):
+    session_id: int
+    role: str
+    content: str
