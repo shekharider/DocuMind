@@ -112,3 +112,40 @@ def get_messages(
     ).all()
 
     return messages
+
+from backend.app.services.rag_engine import (
+    retrieve_context
+)
+
+from backend.app.services.llm_service import (
+    generate_answer
+)
+
+@router.post("/ask")
+def ask_question(
+
+    session_id: int,
+    question: str,
+
+    db: Session = Depends(get_db),
+
+    current_user: User = Depends(
+        get_current_user
+    )
+):
+
+    context = retrieve_context(
+        question,
+        session_id,
+        db
+    )
+
+    answer = generate_answer(
+        question,
+        context
+    )
+
+    return {
+        "question": question,
+        "answer": answer
+    }

@@ -38,4 +38,4 @@ app.include_router(
     documents_router,
     prefix="/documents",
     tags=["Documents"]
-)
+)   

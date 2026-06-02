@@ -14,9 +14,9 @@ from backend.app.db.session import get_db
 
 from backend.app.services.rag_engine import (
     extract_text_from_pdf,
-    chunk_text
+    chunk_text,
+    store_chunks_in_chroma
 )
-
 
 from backend.app.db.models import (
     User,
@@ -82,9 +82,11 @@ def upload_document(
 
     text = extract_text_from_pdf(
         str(file_path)
-   )
+    )
 
     chunks = chunk_text(text)
+
+    saved_chunks = []
 
     for index, chunk in enumerate(chunks):
 
@@ -96,14 +98,32 @@ def upload_document(
 
         db.add(db_chunk)
 
+        db.flush()
+
+        saved_chunks.append(
+            {
+                "id": db_chunk.id,
+                "content": chunk,
+                "chunk_index": index
+            }
+        )
+
     db.commit()
 
+    store_chunks_in_chroma(
+        saved_chunks,
+        document.id,
+        session_id
+    )
+
     return {
-    "id": document.id,
-    "filename": document.filename,
-    "session_id": document.session_id,
-    "chunks_created": len(chunks)
+        "id": document.id,
+        "filename": document.filename,
+        "session_id": document.session_id,
+        "chunks_created": len(saved_chunks)
     }
+
+
 @router.get("/chunks/{document_id}")
 def get_chunks(
     document_id: int,
