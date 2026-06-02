@@ -133,19 +133,41 @@ def ask_question(
         get_current_user
     )
 ):
+    user_message = ChatMessage(
+    session_id=session_id,
+    role="user",
+    content=question
+    )
 
-    context = retrieve_context(
+    db.add(user_message)
+    db.commit()
+
+    retrieval = retrieve_context(
         question,
         session_id,
         db
     )
+
+    context = retrieval["context"]
+
+    chunk_ids = retrieval["chunk_ids"]
 
     answer = generate_answer(
         question,
         context
     )
 
+    assistant_message = ChatMessage(
+    session_id=session_id,
+    role="assistant",
+    content=answer
+    )
+
+    db.add(assistant_message)
+    db.commit()
+
     return {
         "question": question,
-        "answer": answer
+        "answer": answer,
+        "sources": chunk_ids
     }

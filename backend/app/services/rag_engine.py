@@ -115,6 +115,7 @@ def search_chunks(
 
     return results
 
+
 def extract_chunk_ids(results):
 
     return [
@@ -155,10 +156,14 @@ def retrieve_context(
         ).first()
 
         if chunk:
+
             context_parts.append(
                 chunk.content
             )
 
-    return "\n\n".join(
-        context_parts
-    )
+    return {
+        "context": "\n\n".join(
+            context_parts
+        ),
+        "chunk_ids": chunk_ids
+    }
