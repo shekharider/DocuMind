@@ -133,6 +133,17 @@ def ask_question(
         get_current_user
     )
 ):
+    session = db.query(ChatSession).filter(
+        ChatSession.id == session_id,
+        ChatSession.user_id == current_user.id
+    ).first()
+
+    if not session:
+        raise HTTPException(
+            status_code=404,
+            detail="Session not found"
+        )
+
     user_message = ChatMessage(
     session_id=session_id,
     role="user",

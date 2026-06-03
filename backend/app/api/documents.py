@@ -113,7 +113,8 @@ def upload_document(
     store_chunks_in_chroma(
         saved_chunks,
         document.id,
-        session_id
+        session_id,
+        document.filename
     )
 
     return {
@@ -132,3 +133,42 @@ def get_chunks(
     return db.query(DocumentChunk).filter(
         DocumentChunk.document_id == document_id
     ).limit(5).all()
+
+
+@router.get("/session/{session_id}")
+def get_session_documents(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        get_current_user
+    )
+):
+
+    session = db.query(
+        ChatSession
+    ).filter(
+        ChatSession.id == session_id,
+        ChatSession.user_id == current_user.id
+    ).first()
+
+    if not session:
+        raise HTTPException(
+            status_code=404,
+            detail="Session not found"
+        )
+
+    documents = db.query(
+        Document
+    ).filter(
+        Document.session_id == session_id
+    ).all()
+
+    return [
+        {
+            "id": doc.id,
+            "filename": doc.filename
+        }
+        for doc in documents
+    ]
+
+ 

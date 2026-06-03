@@ -1,6 +1,6 @@
 from backend.app.services.rag_engine import (
-    search_chunks,
-    extract_chunk_ids
+    search_chunks_mmr,
+    extract_chunk_ids_from_mmr
 )
 
 from backend.app.db.session import SessionLocal
@@ -8,12 +8,14 @@ from backend.app.db.models import DocumentChunk
 
 db = SessionLocal()
 
-results = search_chunks(
+results = search_chunks_mmr(
     "What is machine learning?",
     1
 )
 
-chunk_ids = extract_chunk_ids(results)
+chunk_ids = extract_chunk_ids_from_mmr(
+    results
+)
 
 for chunk_id in chunk_ids:
 
@@ -23,6 +25,21 @@ for chunk_id in chunk_ids:
         DocumentChunk.id == chunk_id
     ).first()
 
-    print()
-    print("=" * 100)
-    print(chunk.content[:500])
+    if chunk:
+
+        print()
+        print("=" * 100)
+
+        print(
+            f"Chunk ID: {chunk.id}"
+        )
+
+        print(
+            f"Document ID: {chunk.document_id}"
+        )
+
+        print()
+
+        print(
+            chunk.content[:500]
+        )
