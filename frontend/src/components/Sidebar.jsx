@@ -1,6 +1,6 @@
 import "./Sidebar.css";
 
-function Sidebar() {
+function Sidebar({ user }) {
   return (
     <div className="sidebar">
       <h2 className="logo">🧠 DocuMind</h2>
@@ -29,15 +29,27 @@ function Sidebar() {
 
       <div className="profile-section">
         <div className="username">
-          Shank
+          {user?.username}
         </div>
 
-        <button className="logout-btn">
+        <button className="logout-btn"
+        onClick={handleLogout}
+        >
           Logout
         </button>
       </div>
     </div>
   );
 }
+
+const handleLogout = () => {
+
+  localStorage.removeItem(
+    "token"
+  );
+
+  window.location.href =
+    "/login";
+};
 
 export default Sidebar;

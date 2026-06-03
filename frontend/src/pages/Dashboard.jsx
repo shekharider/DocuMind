@@ -1,7 +1,38 @@
+import { useEffect, useState } from "react";
+
 import Sidebar from "../components/Sidebar";
 import ChatWindow from "../components/ChatWindow";
 
+import { getCurrentUser }
+from "../api/userApi";
+
 function Dashboard() {
+
+  const [user, setUser] =
+    useState(null);
+
+  useEffect(() => {
+
+    const loadUser = async () => {
+
+      try {
+
+        const data =
+          await getCurrentUser();
+
+        setUser(data);
+
+      } catch (error) {
+
+        console.log(error);
+
+      }
+    };
+
+    loadUser();
+
+  }, []);
+
   return (
     <div
       style={{
@@ -9,7 +40,8 @@ function Dashboard() {
         height: "100vh",
       }}
     >
-      <Sidebar />
+      <Sidebar user={user} />
+
       <ChatWindow />
     </div>
   );
