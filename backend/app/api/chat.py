@@ -54,6 +54,33 @@ def get_sessions(
 from backend.app.db.models import ChatMessage
 from backend.app.db.chat_schemas import MessageCreate
 
+
+def get_conversation_history(
+    session_id: int,
+    db: Session,
+    limit: int = 10
+) -> str:
+    messages = db.query(ChatMessage).filter(
+        ChatMessage.session_id == session_id
+    ).order_by(
+        ChatMessage.created_at.desc()
+    ).limit(limit).all()
+
+    messages.reverse()
+
+    if not messages:
+        return ""
+
+    formatted_lines = []
+    for message in messages:
+        role_label = "User" if message.role.lower() == "user" else "Assistant"
+        formatted_lines.append(
+            f"{role_label}: {message.content}"
+        )
+
+    return "\n\n".join(formatted_lines)
+
+
 @router.post("/messages")
 def create_message(
     message_data: MessageCreate,
@@ -144,6 +171,12 @@ def ask_question(
             detail="Session not found"
         )
 
+    history = get_conversation_history(
+        session_id,
+        db,
+        limit=10
+    )
+
     user_message = ChatMessage(
     session_id=session_id,
     role="user",
@@ -165,7 +198,8 @@ def ask_question(
 
     answer = generate_answer(
         question,
-        context
+        context,
+        history
     )
 
     assistant_message = ChatMessage(

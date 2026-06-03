@@ -128,8 +128,30 @@ def upload_document(
 @router.get("/chunks/{document_id}")
 def get_chunks(
     document_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
+    document = db.query(Document).filter(
+        Document.id == document_id
+    ).first()
+
+    if not document:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found"
+        )
+
+    session = db.query(ChatSession).filter(
+        ChatSession.id == document.session_id,
+        ChatSession.user_id == current_user.id
+    ).first()
+
+    if not session:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found"
+        )
+
     return db.query(DocumentChunk).filter(
         DocumentChunk.document_id == document_id
     ).limit(5).all()
