@@ -1,0 +1,17 @@
+.chat-input-container {
+  padding: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.chat-input {
+  width: 100%;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid #d1d5db;
+  font-size: 15px;
+  outline: none;
+}
+
+.chat-input:focus {
+  border-color: #111827;
+}
