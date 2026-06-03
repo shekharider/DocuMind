@@ -1,11 +1,14 @@
 import "./Sidebar.css";
 
-function Sidebar({ user }) {
+function Sidebar({ user, sessions, onCreateSession }) {
   return (
     <div className="sidebar">
       <h2 className="logo">🧠 DocuMind</h2>
 
-      <button className="new-chat-btn">
+      <button
+        className="new-chat-btn"
+        onClick={onCreateSession}
+      >
         + New Chat
       </button>
 
@@ -14,17 +17,14 @@ function Sidebar({ user }) {
           Recent Sessions
         </h4>
 
-        <div className="session-item">
-          Machine Learning Notes
-        </div>
-
-        <div className="session-item">
-          DBMS Notes
-        </div>
-
-        <div className="session-item">
-          Research Paper
-        </div>
+        {sessions?.map((session) => (
+          <div
+            key={session.id}
+            className="session-item"
+          >
+            {session.title}
+          </div>
+        ))}
       </div>
 
       <div className="profile-section">
