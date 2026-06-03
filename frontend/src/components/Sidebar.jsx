@@ -1,6 +1,6 @@
 import "./Sidebar.css";
 
-function Sidebar({ user, sessions, onCreateSession }) {
+function Sidebar({ user, sessions, onCreateSession, selectedSession, onSelectSession }) {
   return (
     <div className="sidebar">
       <h2 className="logo">🧠 DocuMind</h2>
@@ -20,7 +20,12 @@ function Sidebar({ user, sessions, onCreateSession }) {
         {sessions?.map((session) => (
           <div
             key={session.id}
-            className="session-item"
+            className={`session-item ${
+              selectedSession?.id === session.id
+                ? "active"
+                : ""
+            }`}
+            onClick={() => onSelectSession(session)}
           >
             {session.title}
           </div>
