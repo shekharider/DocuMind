@@ -11,47 +11,65 @@ from langchain_core.embeddings import Embeddings
 import chromadb
 
 # ============================================================================
-# EMBEDDING MODEL INITIALIZATION
+# LAZY EMBEDDING MODEL LOADING (Render Free memory-safe)
 # ============================================================================
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+
+_embedding_model = None
+
+
+def get_embedding_model():
+    """Lazy-load SentenceTransformer model.
+
+    This avoids importing/loading the embedding model at module import time,
+    which can crash memory-constrained environments (e.g., Render Free).
+    """
+    global _embedding_model
+    if _embedding_model is None:
+        _embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+    return _embedding_model
+
 
 # ============================================================================
 # RAW CHROMA CLIENT (for direct chunk storage)
 # ============================================================================
+
 chroma_client = chromadb.PersistentClient(path="backend/chroma_dbs")
 collection = chroma_client.get_or_create_collection(name="documind_chunks")
 
+
 # ============================================================================
-# LANGCHAIN EMBEDDINGS ADAPTER
+# LANGCHAIN EMBEDDINGS ADAPTER (also lazy)
 # ============================================================================
 
 
 class SentenceTransformerEmbeddings(Embeddings):
-    """LangChain Embeddings adapter for SentenceTransformer."""
-
-    def __init__(self, model):
-        self.model = model
+    """LangChain Embeddings adapter for SentenceTransformer (lazy)."""
 
     def embed_documents(self, texts):
-        embeddings = self.model.encode(texts)
+        embeddings = get_embedding_model().encode(texts)
         return [embedding.tolist() for embedding in embeddings]
 
     def embed_query(self, text):
-        embedding = self.model.encode(text)
+        embedding = get_embedding_model().encode(text)
         return embedding.tolist()
 
 
-langchain_embeddings = SentenceTransformerEmbeddings(model=embedding_model)
+# IMPORTANT: do not call get_embedding_model() here.
+langchain_embeddings = SentenceTransformerEmbeddings()
+
 
 # ============================================================================
 # LANGCHAIN CHROMA VECTOR STORE
 # ============================================================================
 
+# NOTE: Chroma initialization should not load the model; embeddings are only
+# required when embeddings are computed (upload/query time).
 vector_store = Chroma(
     client=chroma_client,
     collection_name="documind_chunks",
     embedding_function=langchain_embeddings,
 )
+
 
 # ============================================================================
 # PDF TEXT EXTRACTION
@@ -93,8 +111,10 @@ def chunk_text(text: str):
 
 def store_chunks_in_chroma(chunks, document_id, session_id, filename):
     """Store document chunks and their embeddings in Chroma DB."""
+    model = get_embedding_model()
     for chunk_data in chunks:
-        embedding = embedding_model.encode(chunk_data["content"]).tolist()
+        embedding = model.encode(chunk_data["content"]).tolist()
+
 
         collection.add(
             ids=[str(chunk_data["id"])],
@@ -124,7 +144,8 @@ def search_chunks_mmr(
     lambda_mult: float = 0.7,
 ):
     """Search for document chunks using Maximum Marginal Relevance (MMR)."""
-    query_embedding = embedding_model.encode(query).tolist()
+    query_embedding = get_embedding_model().encode(query).tolist()
+
 
     results = collection.query(
         query_embeddings=[query_embedding],
@@ -164,7 +185,8 @@ def extract_chunk_ids_from_mmr(results):
 
 def search_chunk_ids_by_similarity(query: str, session_id: int, top_k: int = 5):
     """Fallback search for older Chroma rows."""
-    query_embedding = embedding_model.encode(query).tolist()
+    query_embedding = get_embedding_model().encode(query).tolist()
+
 
     results = collection.query(
         query_embeddings=[query_embedding],
