@@ -1,12 +1,32 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from sqlalchemy import text
+
 from backend.app.db.session import engine
 from backend.app.db.models import Base
 
 from backend.app.api.auth import router as auth_router
 
 Base.metadata.create_all(bind=engine)
+
+with engine.begin() as connection:
+    columns = connection.execute(
+        text("PRAGMA table_info(chat_messages)")
+    ).fetchall()
+
+    column_names = {
+        column[1]
+        for column in columns
+    }
+
+    if "sources" not in column_names:
+        connection.execute(
+            text(
+                "ALTER TABLE chat_messages "
+                "ADD COLUMN sources TEXT"
+            )
+        )
 
 app = FastAPI()
 

@@ -9,7 +9,14 @@ import {
   createSession,
   getMessages,
   askQuestion,
+  renameSession,
+  deleteSession,
 } from "../api/chatApi";
+import {
+  getSessionDocuments,
+  uploadDocument,
+  deleteDocument,
+} from "../api/documentApi";
 
 function Dashboard() {
   const [user, setUser] = useState(null);
@@ -18,6 +25,12 @@ function Dashboard() {
   const [messages, setMessages] = useState([]);
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
+  const [documents, setDocuments] = useState([]);
+  const [showDocuments, setShowDocuments] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [deleteDocumentId, setDeleteDocumentId] = useState(null);
+  const [deletingDocument, setDeletingDocument] = useState(false);
+
 
   const loadMessages = async (sessionId) => {
     try {
@@ -25,6 +38,16 @@ function Dashboard() {
       setMessages(data);
     } catch (error) {
       console.error(error);
+    }
+  };
+
+  const loadDocuments = async (sessionId) => {
+    try {
+      const data = await getSessionDocuments(sessionId);
+      setDocuments(data);
+    } catch (error) {
+      console.error(error);
+      setDocuments([]);
     }
   };
 
@@ -56,8 +79,17 @@ function Dashboard() {
     loadSessions();
   }, []);
 
+  useEffect(() => {
+    if (selectedSession) {
+      loadDocuments(selectedSession.id);
+    } else {
+      setDocuments([]);
+    }
+  }, [selectedSession]);
+
   const handleSelectSession = async (session) => {
     setSelectedSession(session);
+    setShowDocuments(false);
     await loadMessages(session.id);
   };
 
@@ -67,6 +99,56 @@ function Dashboard() {
       await loadSessions();
     } catch (error) {
       console.error(error);
+    }
+  };
+
+  const handleDeleteSession = async (sessionId) => {
+    try {
+      await deleteSession(sessionId);
+
+      // Refresh sessions and select a valid one
+      await loadSessions();
+
+      // loadSessions() updates selectedSession/messages indirectly
+      // Ensure UI doesn’t keep a deleted session
+      if (selectedSession && selectedSession.id === sessionId) {
+        setSelectedSession(null);
+        setMessages([]);
+      }
+
+      alert("Session deleted successfully");
+    } catch (error) {
+      console.error(error);
+      alert("Failed to delete session");
+    }
+  };
+
+  const handleRenameSession = async (sessionId, title) => {
+    try {
+      await renameSession(sessionId, title);
+      
+      setSessions((currentSessions) =>
+        currentSessions.map((session) =>
+          session.id === sessionId
+            ? {
+                ...session,
+                title,
+              }
+            : session
+        )
+      );
+
+      setSelectedSession((currentSession) =>
+        currentSession?.id === sessionId
+          ? {
+              ...currentSession,
+              title,
+            }
+          : currentSession
+      );
+    } catch (error) {
+      console.error(error);
+      alert("Failed to rename session");
     }
   };
 
@@ -93,6 +175,49 @@ function Dashboard() {
     }
   };
 
+  const handleDeleteDocument = async (documentId) => {
+    if (!documentId) return;
+    if (!selectedSession) return;
+
+    try {
+      setDeletingDocument(true);
+      await deleteDocument(documentId);
+      await loadDocuments(selectedSession.id);
+
+      setDeleteDocumentId(null);
+      alert("Document deleted successfully");
+    } catch (error) {
+      console.error(error);
+      alert("Failed to delete document");
+    } finally {
+      setDeletingDocument(false);
+    }
+  };
+
+  const handleUpload = async (file) => {
+
+    if (!selectedSession || !file) {
+      return;
+    }
+
+    try {
+      setUploading(true);
+
+      await uploadDocument(
+        selectedSession.id,
+        file
+      );
+
+      await loadDocuments(selectedSession.id);
+      alert("Document uploaded successfully");
+    } catch (error) {
+      console.error(error);
+      alert("Failed to upload document");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
     <div
       style={{
@@ -108,6 +233,8 @@ function Dashboard() {
         onCreateSession={handleCreateSession}
         selectedSession={selectedSession}
         onSelectSession={handleSelectSession}
+        onRenameSession={handleRenameSession}
+        onDeleteSession={handleDeleteSession}
       />
 
       <ChatWindow
@@ -117,6 +244,14 @@ function Dashboard() {
         setQuestion={setQuestion}
         handleSendMessage={handleSendMessage}
         loading={loading}
+        documents={documents}
+        showDocuments={showDocuments}
+        setShowDocuments={setShowDocuments}
+        handleUpload={handleUpload}
+        uploading={uploading}
+        deleteDocumentId={deleteDocumentId}
+        deletingDocument={deletingDocument}
+        onDeleteDocument={handleDeleteDocument}
       />
     </div>
   );

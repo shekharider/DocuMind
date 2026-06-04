@@ -32,6 +32,97 @@
   background-color: white;
 }
 
+.doc-btn:disabled,
+.upload-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.file-input {
+  display: none;
+}
+
+.documents-panel {
+  width: min(420px, 100%);
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background-color: white;
+}
+
+.documents-panel h3 {
+  margin-bottom: 10px;
+  font-size: 16px;
+}
+
+.documents-panel p {
+  color: #6b7280;
+}
+
+.documents-panel ul {
+  list-style: none;
+}
+
+.documents-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.document-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid #f1f5f9;
+}
+
+.document-list-item:first-child {
+  border-top: none;
+}
+
+.document-filename {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+
+.document-delete-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  color: #dc2626;
+}
+
+.document-delete-btn:hover {
+  background-color: rgba(220, 38, 38, 0.08);
+  color: #b91c1c;
+}
+
+.document-delete-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.documents-panel li {
+  padding: 8px 0;
+  border-top: 1px solid #f1f5f9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.documents-panel li:first-child {
+  border-top: none;
+}
+
 .empty-state {
   flex: 1;
   display: flex;
@@ -106,6 +197,57 @@
   word-wrap: break-word;
   overflow-wrap: break-word;
   white-space: pre-wrap;
+}
+
+.sources-toggle {
+  margin-top: 12px;
+  padding: 6px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background-color: white;
+  color: #374151;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sources-toggle:hover {
+  background-color: #f8fafc;
+}
+
+.sources-panel {
+  max-height: 0;
+  overflow: hidden;
+  margin-top: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background-color: white;
+  opacity: 0;
+  transition:
+    max-height 0.2s ease,
+    margin-top 0.2s ease,
+    padding 0.2s ease,
+    border-color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.sources-panel.open {
+  max-height: 240px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-color: #e5e7eb;
+  opacity: 1;
+}
+
+.source-item {
+  padding: 7px 0;
+  border-top: 1px solid #f1f5f9;
+  color: #374151;
+  font-size: 13px;
+}
+
+.source-item:first-child {
+  border-top: none;
 }
 
 @media (max-width: 768px) {

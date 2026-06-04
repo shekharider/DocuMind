@@ -62,6 +62,8 @@ class ChatMessage(Base):
 
     content = Column(Text, nullable=False)
 
+    sources = Column(Text, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     session_id = Column(

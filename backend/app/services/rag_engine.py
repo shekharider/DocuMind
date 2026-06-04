@@ -9,6 +9,9 @@ from sentence_transformers import (
     SentenceTransformer
 )
 from langchain_chroma import Chroma
+from langchain_chroma.vectorstores import (
+    maximal_marginal_relevance
+)
 from langchain_core.embeddings import Embeddings
 
 import chromadb
@@ -280,19 +283,49 @@ def search_chunks_mmr(
               - page_content: the chunk text
               - metadata: {chunk_id, document_id, session_id, filename, chunk_index}
     """
-    # Perform MMR search using LangChain's vector store
-    # The where filter ensures we only search within the specified session
-    results = vector_store.max_marginal_relevance_search(
-        query=query,
-        k=k,
-        fetch_k=fetch_k,
-        lambda_mult=lambda_mult,
+    query_embedding = embedding_model.encode(
+        query
+    ).tolist()
+
+    results = collection.query(
+        query_embeddings=[
+            query_embedding
+        ],
+        n_results=fetch_k,
         where={
             "session_id": session_id
-        }
+        },
+        include=[
+            "embeddings",
+            "metadatas"
+        ]
     )
-    
-    return results
+
+    embeddings = results.get(
+        "embeddings",
+        [[]]
+    )[0]
+
+    metadatas = results.get(
+        "metadatas",
+        [[]]
+    )[0]
+
+    if len(embeddings) == 0:
+        return []
+
+    selected_indexes = maximal_marginal_relevance(
+        np.array(query_embedding, dtype=np.float32),
+        embeddings,
+        k=k,
+        lambda_mult=lambda_mult
+    )
+
+    return [
+        metadatas[index]
+        for index in selected_indexes
+        if index < len(metadatas) and metadatas[index]
+    ]
 
 
 def extract_chunk_ids_from_mmr(results):
@@ -309,8 +342,84 @@ def extract_chunk_ids_from_mmr(results):
         list: List of chunk IDs (integers)
     """
     return [
-        result.metadata["chunk_id"]
+        result["chunk_id"]
         for result in results
+        if result and "chunk_id" in result
+    ]
+
+
+def delete_document_embeddings(
+    document_id: int,
+):
+    """Delete all Chroma rows that belong to a given document."""
+    # delete accepts an ids list; but we use metadata filter via get/query then delete
+    # First, fetch candidate ids using metadata filter.
+    # Note: we only need ids, not full results.
+    results = collection.get(
+        where={"document_id": document_id},
+        include=["metadatas"],
+    )
+    ids = []
+    for i in range(len(results.get("ids", []))):
+        ids.append(results["ids"][i])
+    if ids:
+        # Chroma ids are stored as strings
+        collection.delete(ids=ids)
+
+
+def delete_session_embeddings(
+    session_id: int,
+):
+    """Delete all Chroma rows that belong to a given chat session."""
+    results = collection.get(
+        where={"session_id": session_id},
+        include=["metadatas"],
+    )
+    ids = []
+    for i in range(len(results.get("ids", []))):
+        ids.append(results["ids"][i])
+    if ids:
+        collection.delete(ids=ids)
+
+
+def search_chunk_ids_by_similarity(
+    query: str,
+    session_id: int,
+    top_k: int = 5
+):
+    """
+    Fallback search for older Chroma rows that were stored without documents.
+
+    LangChain's MMR wrapper ignores rows with missing document text, but Chroma
+    can still return their metadata. We only need chunk_id here because the full
+    chunk text is fetched from SQLite below.
+    """
+    query_embedding = embedding_model.encode(
+        query
+    ).tolist()
+
+    results = collection.query(
+        query_embeddings=[
+            query_embedding
+        ],
+        n_results=top_k,
+        where={
+            "session_id": session_id
+        },
+        include=[
+            "metadatas"
+        ]
+    )
+
+    metadatas = results.get(
+        "metadatas",
+        [[]]
+    )[0]
+
+    return [
+        metadata["chunk_id"]
+        for metadata in metadatas
+        if metadata and "chunk_id" in metadata
     ]
 
 
@@ -359,7 +468,15 @@ def retrieve_context(
     # Extract chunk IDs from MMR results
     chunk_ids = extract_chunk_ids_from_mmr(results)
 
+    if not chunk_ids:
+        chunk_ids = search_chunk_ids_by_similarity(
+            query=query,
+            session_id=session_id,
+            top_k=top_k
+        )
+
     from backend.app.db.models import (
+        Document,
         DocumentChunk
     )
 
@@ -371,8 +488,12 @@ def retrieve_context(
 
         chunk = db.query(
             DocumentChunk
+        ).join(
+            Document,
+            DocumentChunk.document_id == Document.id
         ).filter(
-            DocumentChunk.id == chunk_id
+            DocumentChunk.id == chunk_id,
+            Document.session_id == session_id
         ).first()
 
         if chunk:

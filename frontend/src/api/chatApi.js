@@ -46,3 +46,24 @@ export const askQuestion = async (
 
   return response.data;
 };
+
+export const renameSession = async (sessionId, title) => {
+  const response = await api.put(
+    `/chat/sessions/${sessionId}`,
+    {
+      title,
+    }
+  );
+
+  return response.data;
+};
+
+export const deleteSession = async (sessionId) => {
+  const response = await api.delete(
+    `/chat/sessions/${sessionId}`
+  );
+
+  return response.data;
+};
+
+
