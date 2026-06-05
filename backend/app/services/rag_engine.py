@@ -3,7 +3,16 @@ from pypdf import PdfReader
 import numpy as np
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from sentence_transformers import SentenceTransformer
+# TEMPORARY RENDER MEMORY DIAGNOSTIC
+# TEMPORARY RENDER MEMORY DIAGNOSTIC
+DIAGNOSTIC_MODE = True  # set False to restore full RAG
+
+# TEMPORARY RENDER MEMORY DIAGNOSTIC
+# Do not import/initialize sentence_transformers in diagnostic mode.
+if not DIAGNOSTIC_MODE:
+    from sentence_transformers import SentenceTransformer
+
+
 from langchain_chroma import Chroma
 from langchain_chroma.vectorstores import maximal_marginal_relevance
 from langchain_core.embeddings import Embeddings
@@ -460,6 +469,12 @@ def retrieve_context_multiquery(
 # ============================================================================
 # PUBLIC ENTRYPOINT (used by /chat/ask)
 # ============================================================================
+
+
+# TEMPORARY RENDER MEMORY DIAGNOSTIC
+# When enabled, we skip all embedding + retrieval work.
+
+
 
 
 def retrieve_context(query, session_id, db, top_k=5):
