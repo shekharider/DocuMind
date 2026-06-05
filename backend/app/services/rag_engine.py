@@ -10,6 +10,11 @@ from langchain_core.embeddings import Embeddings
 
 import chromadb
 
+# Chroma delete helpers reference a `collection` symbol in older code paths.
+# Keep it undefined at import time; only define it inside get_collection().
+collection = None
+
+
 # ============================================================================
 # LAZY EMBEDDING MODEL LOADING (Render Free memory-safe)
 # ============================================================================
@@ -30,11 +35,30 @@ def get_embedding_model():
 
 
 # ============================================================================
-# RAW CHROMA CLIENT (for direct chunk storage)
+# CHROMA (LAZY INITIALIZATION)
 # ============================================================================
 
-chroma_client = chromadb.PersistentClient(path="backend/chroma_dbs")
-collection = chroma_client.get_or_create_collection(name="documind_chunks")
+_chroma_client = None
+_collection = None
+
+
+def get_collection():
+    """Lazy-load Chroma collection.
+
+    IMPORTANT: do not create PersistentClient/get_or_create_collection at
+    module import time; Render startup can hang due to large resource
+    initialization.
+    """
+    global _chroma_client, _collection
+
+    if _collection is None:
+        _chroma_client = chromadb.PersistentClient(path="backend/chroma_dbs")
+        _collection = _chroma_client.get_or_create_collection(
+            name="documind_chunks"
+        )
+
+    return _collection
+
 
 
 # ============================================================================
@@ -64,11 +88,26 @@ langchain_embeddings = SentenceTransformerEmbeddings()
 
 # NOTE: Chroma initialization should not load the model; embeddings are only
 # required when embeddings are computed (upload/query time).
-vector_store = Chroma(
-    client=chroma_client,
-    collection_name="documind_chunks",
-    embedding_function=langchain_embeddings,
-)
+def get_vector_store():
+    """Lazy-create a LangChain Chroma vector store.
+
+    This must not run at import time.
+    """
+    return Chroma(
+        client=get_chroma_client(),
+        collection_name="documind_chunks",
+        embedding_function=langchain_embeddings,
+    )
+
+
+def get_chroma_client():
+    """Get underlying Chroma persistent client lazily."""
+    global _chroma_client
+    if _chroma_client is None:
+        # ensures get_collection() triggers client creation
+        get_collection()
+    return _chroma_client
+
 
 
 # ============================================================================
@@ -147,8 +186,9 @@ def search_chunks_mmr(
     query_embedding = get_embedding_model().encode(query).tolist()
 
 
-    results = collection.query(
+    results = get_collection().query(
         query_embeddings=[query_embedding],
+
         n_results=fetch_k,
         where={"session_id": session_id},
         include=["embeddings", "metadatas"],
@@ -188,7 +228,8 @@ def search_chunk_ids_by_similarity(query: str, session_id: int, top_k: int = 5):
     query_embedding = get_embedding_model().encode(query).tolist()
 
 
-    results = collection.query(
+    results = get_collection().query(
+
         query_embeddings=[query_embedding],
         n_results=top_k,
         where={"session_id": session_id},
@@ -211,7 +252,8 @@ def search_chunk_ids_by_similarity(query: str, session_id: int, top_k: int = 5):
 
 def delete_document_embeddings(document_id: int):
     """Delete all Chroma rows that belong to a given document."""
-    results = collection.get(where={"document_id": document_id}, include=["metadatas"])
+    results = get_collection().get(where={"document_id": document_id}, include=["metadatas"])
+
     ids = []
     for _ in range(len(results.get("ids", []))):
         ids.append(results["ids"][_])

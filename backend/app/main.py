@@ -8,6 +8,8 @@ from backend.app.db.models import Base
 
 from backend.app.api.auth import router as auth_router
 
+print("STEP 1__auth_router")
+
 Base.metadata.create_all(bind=engine)
 
 with engine.begin() as connection:
@@ -29,6 +31,7 @@ with engine.begin() as connection:
         )
 
 app = FastAPI()
+print("STEP __app_created")
 
 app.add_middleware(
     CORSMiddleware,
@@ -56,6 +59,8 @@ def root():
 
 from backend.app.api.chat import router as chat_router
 
+print("STEP 2__chat_router")
+
 app.include_router(
     chat_router,
     prefix="/chat",
@@ -65,6 +70,7 @@ app.include_router(
 from backend.app.api.documents import (
     router as documents_router
 )
+print("STEP 3___document_router")
 
 app.include_router(
     documents_router,
