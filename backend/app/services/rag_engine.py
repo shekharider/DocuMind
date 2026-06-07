@@ -3,44 +3,89 @@ from pypdf import PdfReader
 import numpy as np
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-# TEMPORARY RENDER MEMORY DIAGNOSTIC
-# TEMPORARY RENDER MEMORY DIAGNOSTIC
-DIAGNOSTIC_MODE = True  # set False to restore full RAG
-
-# TEMPORARY RENDER MEMORY DIAGNOSTIC
-# Do not import/initialize sentence_transformers in diagnostic mode.
-if not DIAGNOSTIC_MODE:
-    from sentence_transformers import SentenceTransformer
-
+from backend.app.core.config import settings
 
 from langchain_chroma import Chroma
 from langchain_chroma.vectorstores import maximal_marginal_relevance
 from langchain_core.embeddings import Embeddings
-
 import chromadb
 
-# Chroma delete helpers reference a `collection` symbol in older code paths.
-# Keep it undefined at import time; only define it inside get_collection().
-collection = None
-
-
 # ============================================================================
-# LAZY EMBEDDING MODEL LOADING (Render Free memory-safe)
+# HUGGING FACE INFERENCE EMBEDDINGS ADAPTER (Render Memory-safe)
 # ============================================================================
 
-_embedding_model = None
+class HuggingFaceInferenceEmbeddings(Embeddings):
+    """LangChain Embeddings adapter for Hugging Face Inference API."""
+
+    def __init__(self, hf_token: str, model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
+        if not hf_token:
+            raise ValueError("Hugging Face access token (HF_TOKEN) is not set in environment or config.")
+        self.hf_token = hf_token.strip().strip('"').strip("'")
+        self.model_name = model_name
+        self.api_url = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{model_name}"
+        self.headers = {
+            "Authorization": f"Bearer {self.hf_token}",
+            "Content-Type": "application/json",
+            "x-wait-for-model": "true"
+        }
+
+    def _query(self, texts: list[str]) -> list[list[float]]:
+        import urllib.request
+        import json
+        import time
+
+        payload = {"inputs": texts}
+        req = urllib.request.Request(
+            self.api_url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers=self.headers,
+            method="POST"
+        )
+
+        for attempt in range(5):
+            try:
+                with urllib.request.urlopen(req, timeout=60) as response:
+                    if response.status == 200:
+                        res = json.loads(response.read().decode("utf-8"))
+                        if isinstance(res, list):
+                            return res
+                        raise ValueError(f"Unexpected response format from HF API: {type(res)}")
+            except urllib.error.HTTPError as e:
+                # Handle model loading status (503 Service Unavailable)
+                try:
+                    err_content = e.read().decode("utf-8")
+                    err_data = json.loads(err_content)
+                    if "estimated_time" in err_data:
+                        wait_time = min(float(err_data["estimated_time"]), 15.0)
+                        time.sleep(wait_time)
+                        continue
+                except Exception:
+                    pass
+                if attempt == 4:
+                    raise e
+            except Exception as e:
+                if attempt == 4:
+                    raise e
+                time.sleep(2)
+        raise RuntimeError("Failed to retrieve embeddings from Hugging Face Inference API.")
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        # Hugging Face API has size/payload limits, so batch texts in sizes of 16.
+        batch_size = 16
+        all_embeddings = []
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+            embeddings = self._query(batch)
+            all_embeddings.extend(embeddings)
+        return all_embeddings
+
+    def embed_query(self, text: str) -> list[float]:
+        # query is a single text, but we wrap it in a list to call _query and get back a list of one vector
+        embeddings = self._query([text])
+        return embeddings[0]
 
 
-def get_embedding_model():
-    """Lazy-load SentenceTransformer model.
-
-    This avoids importing/loading the embedding model at module import time,
-    which can crash memory-constrained environments (e.g., Render Free).
-    """
-    global _embedding_model
-    if _embedding_model is None:
-        _embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-    return _embedding_model
+langchain_embeddings = HuggingFaceInferenceEmbeddings(settings.HF_TOKEN)
 
 
 # ============================================================================
@@ -68,27 +113,6 @@ def get_collection():
 
     return _collection
 
-
-
-# ============================================================================
-# LANGCHAIN EMBEDDINGS ADAPTER (also lazy)
-# ============================================================================
-
-
-class SentenceTransformerEmbeddings(Embeddings):
-    """LangChain Embeddings adapter for SentenceTransformer (lazy)."""
-
-    def embed_documents(self, texts):
-        embeddings = get_embedding_model().encode(texts)
-        return [embedding.tolist() for embedding in embeddings]
-
-    def embed_query(self, text):
-        embedding = get_embedding_model().encode(text)
-        return embedding.tolist()
-
-
-# IMPORTANT: do not call get_embedding_model() here.
-langchain_embeddings = SentenceTransformerEmbeddings()
 
 
 # ============================================================================
@@ -159,12 +183,14 @@ def chunk_text(text: str):
 
 def store_chunks_in_chroma(chunks, document_id, session_id, filename):
     """Store document chunks and their embeddings in Chroma DB."""
-    model = get_embedding_model()
-    for chunk_data in chunks:
-        embedding = model.encode(chunk_data["content"]).tolist()
+    if not chunks:
+        return
 
+    contents = [chunk_data["content"] for chunk_data in chunks]
+    embeddings = langchain_embeddings.embed_documents(contents)
 
-        collection.add(
+    for chunk_data, embedding in zip(chunks, embeddings):
+        get_collection().add(
             ids=[str(chunk_data["id"])],
             embeddings=[embedding],
             metadatas=[
@@ -192,7 +218,7 @@ def search_chunks_mmr(
     lambda_mult: float = 0.7,
 ):
     """Search for document chunks using Maximum Marginal Relevance (MMR)."""
-    query_embedding = get_embedding_model().encode(query).tolist()
+    query_embedding = langchain_embeddings.embed_query(query)
 
 
     results = get_collection().query(
@@ -234,7 +260,7 @@ def extract_chunk_ids_from_mmr(results):
 
 def search_chunk_ids_by_similarity(query: str, session_id: int, top_k: int = 5):
     """Fallback search for older Chroma rows."""
-    query_embedding = get_embedding_model().encode(query).tolist()
+    query_embedding = langchain_embeddings.embed_query(query)
 
 
     results = get_collection().query(
@@ -267,17 +293,17 @@ def delete_document_embeddings(document_id: int):
     for _ in range(len(results.get("ids", []))):
         ids.append(results["ids"][_])
     if ids:
-        collection.delete(ids=ids)
+        get_collection().delete(ids=ids)
 
 
 def delete_session_embeddings(session_id: int):
     """Delete all Chroma rows that belong to a given chat session."""
-    results = collection.get(where={"session_id": session_id}, include=["metadatas"])
+    results = get_collection().get(where={"session_id": session_id}, include=["metadatas"])
     ids = []
     for _ in range(len(results.get("ids", []))):
         ids.append(results["ids"][_])
     if ids:
-        collection.delete(ids=ids)
+        get_collection().delete(ids=ids)
 
 
 # ============================================================================
